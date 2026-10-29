@@ -20,6 +20,7 @@
 
   <div class="pe-actions">
     <button id="pe-play" class="pe-primary" type="button">▶ スタート</button>
+    <button id="pe-back" type="button">⏮ 戻る</button>
     <button id="pe-skip" type="button">⏭ 次へ</button>
     <button id="pe-reset" type="button">↺ 最初から</button>
     <button id="pe-test" type="button">🔊 音をためす</button>
@@ -39,6 +40,7 @@
     <summary>⚙ 活動名・秒数・順番・くり返し回数を設定する</summary>
     <div class="pe-settings-content">
       <div class="pe-round-setting"><label for="pe-rounds">くり返し回数</label><input id="pe-rounds" type="number" min="1" max="99" value="4"><span>周</span></div>
+      <p class="pe-total-time" id="pe-total-time" aria-live="polite"></p>
       <div id="pe-step-list" class="pe-step-list"></div>
       <div class="pe-settings-actions"><button type="button" id="pe-add">＋ 活動を追加</button><button type="button" id="pe-default">見本に戻す</button></div>
       <p>活動の編集をするとタイマーは最初に戻ります。設定はブラウザに自動保存しません。</p>
@@ -56,7 +58,7 @@
     <div id="pe-share-status" role="status" aria-live="polite">このタイマーはブラウザに保存されません。残したい場合も共有リンクをコピーしておいてね。</div>
     <p class="pe-share-note">※ リンク先は公開ページです。活動名に児童の氏名など個人情報は入力しないでください。</p>
   </section>
-  <div class="pe-footnote">残り3・2・1秒で「ピ・ピ・ピ」、切り替えで「ビー！」。Chromebook本体の音量も上げてください。</div>
+  <div class="pe-footnote">残り3・2・1秒で「ピ・ピ・ピ」、切り替えで「ビー！」。iPhoneでは「音をためす」で確認し、本体のメディア音量も上げてください。</div>
 </div>
 
 <style>
@@ -78,7 +80,7 @@
   #pe-timer .pe-stage-meta {width:100%;display:flex;justify-content:space-between;gap:12px;font-size:17px;font-weight:800;}
   #pe-timer .pe-stage-meta span {background:#ffffff30;border:1px solid #ffffff60;padding:5px 12px;border-radius:999px;}
   #pe-timer #pe-name {width:100%;margin:29px 0 0;font-weight:950;line-height:1.14;letter-spacing:.015em;
-    font-size:clamp(47px,10.8cqi,140px);overflow-wrap:anywhere;text-shadow:0 4px 12px #0002;}
+    font-size:clamp(47px,10.8cqi,140px);white-space:nowrap;overflow-wrap:normal;text-shadow:0 4px 12px #0002;}
   #pe-timer .pe-clock {font-weight:950;letter-spacing:.015em;line-height:1.1; font-size:clamp(72px,15cqi,180px); font-variant-numeric:tabular-nums; margin:12px 0 15px;}
   #pe-timer .pe-track {height:18px;width:min(100%,780px);border-radius:99px;background:#09182ce8;box-shadow:inset 0 2px 7px #0007;border:2px solid #00102870;overflow:hidden;margin:auto 0 18px;}
   #pe-timer .pe-bar {height:100%;width:100%;border-radius:99px;background:#fff5ba;box-shadow:0 0 12px #fff9c0a8;transition:width .08s linear;}
@@ -102,6 +104,7 @@
   #pe-timer .pe-settings-content {padding:0 16px 18px;}
   #pe-timer .pe-round-setting {display:flex;align-items:center;gap:9px;margin-bottom:16px;font-weight:800;}
   #pe-timer #pe-rounds {width:80px;padding:7px;border:2px solid #d3dceb;border-radius:10px;}
+  #pe-timer .pe-total-time {font-size:14px;font-weight:800;color:#32547d;margin:-5px 0 13px;padding:8px 11px;background:#edf4ff;border-radius:9px;}
   #pe-timer .pe-step-list {display:grid;gap:9px;}
   #pe-timer .pe-step {display:grid;grid-template-columns:minmax(120px,1fr) 86px 100px auto;gap:8px;align-items:center;background:#f0f5fb;border-radius:12px;padding:9px;}
   #pe-timer .pe-step input,#pe-timer .pe-step select {width:100%;min-width:0;border:2px solid #d3dceb;border-radius:8px;padding:8px;background:white;color:#17253f;}
@@ -178,10 +181,57 @@
   const shared=params.has('s')?decodeSharedConfig(params.get('s')):null;
   let config=clean(shared||parseTimerTrain(params));
   let mode='idle', phase=0, round=0, remaining=0, endAt=0, timer=null, runSteps=[], runRounds=1, fired=new Set();
-  let ctx=null, output=null;
+  let ctx=null, output=null, mediaAudio=null, mediaStopTimer=null;
+  const IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+
+  // iPhone uses a real HTML audio track. It is treated as media audio rather
+  // than a Web Audio sound effect, including on devices in silent mode.
+  function makeMediaSound() {
+    const sampleRate=22050, length=Math.ceil(sampleRate*1.24);
+    const bytes=new ArrayBuffer(44+length*2), view=new DataView(bytes);
+    const tag=(at,value)=>{for(let i=0;i<value.length;i++)view.setUint8(at+i,value.charCodeAt(i));};
+    tag(0,'RIFF');view.setUint32(4,36+length*2,true);tag(8,'WAVE');tag(12,'fmt ');
+    view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+    view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true);
+    view.setUint16(32,2,true);view.setUint16(34,16,true);tag(36,'data');view.setUint32(40,length*2,true);
+    for(let i=0;i<length;i++){
+      const t=i/sampleRate, isShort=t<.19, isLong=t>=.32&&t<1.18;
+      const local=isShort?t:isLong?t-.32:0, duration=isShort ? .19 : .86;
+      const envelope=(isShort||isLong)?Math.min(1,local/.012,(duration-local)/.07):0;
+      const sound=(Math.sin(2*Math.PI*(isShort?850:920)*local)*.68+
+        Math.sin(2*Math.PI*(isShort?1275:1380)*local)*.30)*envelope*.82;
+      view.setInt16(44+i*2,Math.max(-1,Math.min(1,sound))*32767,true);
+    }
+    return URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
+  }
+  function playMediaSound(long=false) {
+    if(!mediaAudio||config.volume===0)return;
+    if(mediaStopTimer!==null)clearTimeout(mediaStopTimer);
+    mediaAudio.pause();
+    try {mediaAudio.currentTime=long ? 0.32 : 0;} catch {}
+    mediaAudio.volume=config.volume/100;
+    const playing=mediaAudio.play();
+    if(playing?.then)playing.then(()=>{
+      el('pe-audio-status').textContent='🔊 iPhone音声オン（音量は本体でも調整）';
+    }).catch(()=>{
+      el('pe-audio-status').textContent='音を再生できません。「音をためす」をタップしてください';
+    });
+    mediaStopTimer=setTimeout(()=>{mediaAudio.pause();mediaStopTimer=null;},long?900:230);
+  }
 
   function audioUnlock() {
     try {
+      if(navigator.audioSession)navigator.audioSession.type='playback';
+      if(IS_IOS){
+        if(!mediaAudio){
+          mediaAudio=new Audio(makeMediaSound());
+          mediaAudio.preload='auto';
+          mediaAudio.load();
+        }
+        mediaAudio.volume=config.volume/100;
+        return;
+      }
       if (!ctx) {
         const AudioCtor = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtor) {el('pe-audio-status').textContent='このブラウザは音声再生に対応していません';return;}
@@ -200,6 +250,11 @@
     } catch {el('pe-audio-status').textContent='音声が有効にできませんでした';}
   }
   function beep(long=false,after=0) {
+    if(IS_IOS){
+      if(after>0)setTimeout(()=>playMediaSound(long),after*1000);
+      else playMediaSound(long);
+      return;
+    }
     if(!ctx||!output||!config.volume) return;
     const t=ctx.currentTime+after;
     const duration=long?.82:.17;
@@ -217,11 +272,35 @@
     const seconds=Math.ceil(Math.max(0,ms)/1000);
     return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
   };
+  function durationLabel(seconds) {
+    const h=Math.floor(seconds/3600), m=Math.floor(seconds%3600/60), s=seconds%60;
+    return (h?`${h}時間`:'')+(m?`${m}分`:'')+(!h&&!m||s?`${s}秒`:'');
+  }
+  const nameMeasure=document.createElement('canvas').getContext('2d');
+  let fittedName='', fittedWidth=0;
+  function fitStageName() {
+    const nameEl=el('pe-name'), name=nameEl.textContent;
+    const width=nameEl.clientWidth;
+    if(!width||(name===fittedName&&width===fittedWidth))return;
+    fittedName=name;fittedWidth=width;
+    const base=limit(root.clientWidth*.108,47,140);
+    const maxFont=Array.from(name).length>=12?base*.68:base;
+    let low=11, high=maxFont;
+    const family=getComputedStyle(nameEl).fontFamily;
+    for(let i=0;i<12;i++){
+      const test=(low+high)/2;
+      nameMeasure.font=`950 ${test}px ${family}`;
+      if(nameMeasure.measureText(name).width<=width-8)low=test;
+      else high=test;
+    }
+    nameEl.style.fontSize=Math.floor(low)+'px';
+  }
   function draw() {
     const steps=runSteps, current=steps[phase], isDone=mode==='done';
     const secondsTotal=current.seconds*1000;
     el('pe-stage').style.setProperty('--pe-main',COLORS[current.color]);
     el('pe-name').textContent=isDone?'おしまい！':current.name;
+    fitStageName();
     el('pe-clock').textContent=isDone?'00:00':format(remaining);
     el('pe-position').textContent=mode==='waiting'?`⏸ スタート待ち ${phase+1} / ${steps.length}`:`活動 ${phase+1} / ${steps.length}`;
     el('pe-round').textContent=`${round+1} / ${runRounds} 周目`;
@@ -230,6 +309,7 @@
     let next=phase+1<steps.length?steps[phase+1].name:round+1<runRounds?steps[0].name:'ゴール！';
     el('pe-next-name').textContent=isDone?'終了':next;
     el('pe-play').textContent=mode==='running'?'⏸ 一時停止':mode==='done'?'↻ もう一度':mode==='waiting'?'▶ つぎをスタート':'▶ スタート';
+    el('pe-back').disabled=phase===0&&round===0&&mode!=='done';
     el('pe-skip').disabled=isDone;
   }
   function stopTick() { if(timer!==null)clearInterval(timer); timer=null; }
@@ -278,6 +358,22 @@
     advance(true);
     if(mode!=='running'&&mode!=='done'){mode=config.advanceMode==='manual'?'waiting':'paused';draw();}
   }
+  function back() {
+    if(phase===0&&round===0&&mode!=='done')return;
+    audioUnlock();
+    if(mode!=='done'){
+      if(phase>0)phase--;
+      else {round--;phase=runSteps.length-1;}
+    }
+    remaining=runSteps[phase].seconds*1000;
+    fired=new Set();
+    if(mode==='running'&&config.advanceMode==='auto')endAt=performance.now()+remaining;
+    else {
+      stopTick();endAt=0;
+      mode=config.advanceMode==='manual'?'waiting':'paused';
+    }
+    beep(true);draw();
+  }
   function invalidateShareLink() {
     el('pe-share-link').value='';
     el('pe-open-share').hidden=true;
@@ -301,9 +397,12 @@
     el('pe-rounds').value=config.rounds;
     el('pe-volume').value=config.volume;
     el('pe-volume-value').textContent=config.volume+'%';
+    const oneRound=config.steps.reduce((sum,step)=>sum+step.seconds,0);
+    el('pe-total-time').textContent=`⏱ 1周 ${durationLabel(oneRound)} × ${config.rounds}周 ＝ 合計 ${durationLabel(oneRound*config.rounds)}`;
   }
   el('pe-play').addEventListener('click',togglePlay);
   el('pe-reset').addEventListener('click',reset);
+  el('pe-back').addEventListener('click',back);
   el('pe-skip').addEventListener('click',skip);
   el('pe-test').addEventListener('click',()=>{
     audioUnlock();beep(false,.05);beep(false,1.05);beep(false,2.05);beep(true,3.05);
@@ -312,6 +411,7 @@
     config.volume=limit(Number(e.target.value),0,100);
     el('pe-volume-value').textContent=config.volume+'%';
     if(output)output.gain.value=config.volume/100;
+    if(mediaAudio)mediaAudio.volume=config.volume/100;
     invalidateShareLink();
   });
   root.querySelectorAll('input[name="pe-advance-mode"]').forEach(input=>{
@@ -375,6 +475,8 @@
   });
   root.querySelector('input[name="pe-advance-mode"][value="'+config.advanceMode+'"]').checked=true;
   stepEditor();reset();
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{fittedWidth=0;fitStageName();}).observe(el('pe-stage'));
+  else window.addEventListener('resize',()=>{fittedWidth=0;fitStageName();});
 })();
 </script>
 </body>
