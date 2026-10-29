@@ -181,80 +181,40 @@
   const shared=params.has('s')?decodeSharedConfig(params.get('s')):null;
   let config=clean(shared||parseTimerTrain(params));
   let mode='idle', phase=0, round=0, remaining=0, endAt=0, timer=null, runSteps=[], runRounds=1, fired=new Set();
-  let ctx=null, output=null, mediaAudio=null, mediaStopTimer=null;
-  const IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
-
-  // iPhone uses a real HTML audio track. It is treated as media audio rather
-  // than a Web Audio sound effect, including on devices in silent mode.
-  function makeMediaSound() {
-    const sampleRate=22050, length=Math.ceil(sampleRate*1.24);
-    const bytes=new ArrayBuffer(44+length*2), view=new DataView(bytes);
-    const tag=(at,value)=>{for(let i=0;i<value.length;i++)view.setUint8(at+i,value.charCodeAt(i));};
-    tag(0,'RIFF');view.setUint32(4,36+length*2,true);tag(8,'WAVE');tag(12,'fmt ');
-    view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
-    view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true);
-    view.setUint16(32,2,true);view.setUint16(34,16,true);tag(36,'data');view.setUint32(40,length*2,true);
-    for(let i=0;i<length;i++){
-      const t=i/sampleRate, isShort=t<.19, isLong=t>=.32&&t<1.18;
-      const local=isShort?t:isLong?t-.32:0, duration=isShort ? .19 : .86;
-      const envelope=(isShort||isLong)?Math.min(1,local/.012,(duration-local)/.07):0;
-      const sound=(Math.sin(2*Math.PI*(isShort?850:920)*local)*.68+
-        Math.sin(2*Math.PI*(isShort?1275:1380)*local)*.30)*envelope*.82;
-      view.setInt16(44+i*2,Math.max(-1,Math.min(1,sound))*32767,true);
-    }
-    return URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
-  }
-  function playMediaSound(long=false) {
-    if(!mediaAudio||config.volume===0)return;
-    if(mediaStopTimer!==null)clearTimeout(mediaStopTimer);
-    mediaAudio.pause();
-    try {mediaAudio.currentTime=long ? 0.32 : 0;} catch {}
-    mediaAudio.volume=config.volume/100;
-    const playing=mediaAudio.play();
-    if(playing?.then)playing.then(()=>{
-      el('pe-audio-status').textContent='🔊 iPhone音声オン（音量は本体でも調整）';
-    }).catch(()=>{
-      el('pe-audio-status').textContent='音を再生できません。「音をためす」をタップしてください';
-    });
-    mediaStopTimer=setTimeout(()=>{mediaAudio.pause();mediaStopTimer=null;},long?900:230);
-  }
+  let ctx=null, output=null, audioStarting=false;
 
   function audioUnlock() {
     try {
-      if(navigator.audioSession)navigator.audioSession.type='playback';
-      if(IS_IOS){
-        if(!mediaAudio){
-          mediaAudio=new Audio(makeMediaSound());
-          mediaAudio.preload='auto';
-          mediaAudio.load();
-        }
-        mediaAudio.volume=config.volume/100;
-        return;
-      }
+      // WebKit defaults Web Audio to an ambient session, which can be silent
+      // with the iPhone's Ring/Silent switch. Use a playback audio session.
+      try {if(navigator.audioSession)navigator.audioSession.type='playback';} catch {}
       if (!ctx) {
         const AudioCtor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtor) {el('pe-audio-status').textContent='このブラウザは音声再生に対応していません';return;}
+        if (!AudioCtor) {
+          el('pe-audio-status').textContent='このブラウザは音声再生に対応していません';
+          return Promise.resolve(false);
+        }
         ctx = new AudioCtor();
         const limiter=ctx.createDynamicsCompressor();
         limiter.threshold.value=-13; limiter.ratio.value=12;
         output=ctx.createGain(); output.connect(limiter); limiter.connect(ctx.destination);
       }
       output.gain.value=config.volume/100;
-      if(ctx.state!=='running') ctx.resume().then(()=>{
+      const resume=ctx.state==='running'?Promise.resolve():ctx.resume();
+      return Promise.resolve(resume).then(()=>{
+        if(ctx.state!=='running')throw new Error('AudioContext is not running');
         el('pe-audio-status').textContent='🔊 音声オン';
+        return true;
       }).catch(()=>{
-        el('pe-audio-status').textContent='音声がブロックされています。Chromeの音設定を確認してください';
+        el('pe-audio-status').textContent='音声を有効にできません。Safariで開いて、もう一度「音をためす」を押してください';
+        return false;
       });
-      else el('pe-audio-status').textContent='🔊 音声オン';
-    } catch {el('pe-audio-status').textContent='音声が有効にできませんでした';}
+    } catch {
+      el('pe-audio-status').textContent='音声が有効にできませんでした';
+      return Promise.resolve(false);
+    }
   }
   function beep(long=false,after=0) {
-    if(IS_IOS){
-      if(after>0)setTimeout(()=>playMediaSound(long),after*1000);
-      else playMediaSound(long);
-      return;
-    }
     if(!ctx||!output||!config.volume) return;
     const t=ctx.currentTime+after;
     const duration=long?.82:.17;
@@ -345,11 +305,17 @@
   function togglePlay() {
     if(mode==='running'){remaining=Math.max(0,endAt-performance.now());mode='paused';stopTick();draw();return;}
     if(mode==='done')reset();
-    audioUnlock();
-    // A short cue during the actual click unlocks audio reliably in Chrome.
-    beep(false);
-    mode='running';endAt=performance.now()+remaining;
-    stopTick();timer=setInterval(tick,50);tick();
+    if(audioStarting)return;
+    audioStarting=true;el('pe-play').disabled=true;
+    el('pe-audio-status').textContent='🔊 音声を準備しています…';
+    const audioReady=audioUnlock(); // Called directly inside the click gesture.
+    Promise.race([audioReady,new Promise(resolve=>setTimeout(()=>resolve(false),1200))]).then(ready=>{
+      audioStarting=false;el('pe-play').disabled=false;
+      if(ready)beep(false);
+      else el('pe-audio-status').textContent='音が出ない場合はSafariで「音をためす」を押してください';
+      mode='running';endAt=performance.now()+remaining;
+      stopTick();timer=setInterval(tick,50);tick();
+    });
   }
   function skip() {
     if(mode==='done')return;
@@ -405,13 +371,19 @@
   el('pe-back').addEventListener('click',back);
   el('pe-skip').addEventListener('click',skip);
   el('pe-test').addEventListener('click',()=>{
-    audioUnlock();beep(false,.05);beep(false,1.05);beep(false,2.05);beep(true,3.05);
+    el('pe-test').disabled=true;
+    el('pe-audio-status').textContent='🔊 音声を準備しています…';
+    const audioReady=audioUnlock();
+    Promise.race([audioReady,new Promise(resolve=>setTimeout(()=>resolve(false),1200))]).then(ready=>{
+      el('pe-test').disabled=false;
+      if(ready){beep(false,.05);beep(false,1.05);beep(false,2.05);beep(true,3.05);}
+      else el('pe-audio-status').textContent='音声を再生できません。Safariで開き直して、再度お試しください';
+    });
   });
   el('pe-volume').addEventListener('input',e=>{
     config.volume=limit(Number(e.target.value),0,100);
     el('pe-volume-value').textContent=config.volume+'%';
     if(output)output.gain.value=config.volume/100;
-    if(mediaAudio)mediaAudio.volume=config.volume/100;
     invalidateShareLink();
   });
   root.querySelectorAll('input[name="pe-advance-mode"]').forEach(input=>{
