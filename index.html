@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eaf2ff">
+  <meta name="description" content="活動の名前と秒数を自由に設定。大きな文字と減っていくバーで見やすい体育・活動タイマー。リンクで共有できます。">
+  <title>活動タイマー</title>
+  <style>body { margin:0; background:#eaf2ff; } </style>
+</head>
+<body>
+<div id="pe-timer" class="pe-timer">
+  <section class="pe-stage" id="pe-stage" aria-live="off">
+    <div class="pe-stage-meta"><span id="pe-position">活動 1 / 4</span><span id="pe-round">1 / 4 周目</span></div>
+    <h1 id="pe-name">いちについて</h1>
+    <div id="pe-clock" class="pe-clock" role="timer" aria-label="残り時間">00:10</div>
+    <div class="pe-track"><div id="pe-bar" class="pe-bar"></div></div>
+    <div class="pe-next">つぎ <strong id="pe-next-name">ゲームスタート</strong></div>
+  </section>
+
+  <div class="pe-actions">
+    <button id="pe-play" class="pe-primary" type="button">▶ スタート</button>
+    <button id="pe-skip" type="button">⏭ 次へ</button>
+    <button id="pe-reset" type="button">↺ 最初から</button>
+    <button id="pe-test" type="button">🔊 音をためす</button>
+  </div>
+  <fieldset class="pe-mode-select" aria-label="タイマーの進み方">
+    <legend>タイマーの進み方</legend>
+    <label><input type="radio" name="pe-advance-mode" value="auto" checked><span>自動でつぎへ</span></label>
+    <label><input type="radio" name="pe-advance-mode" value="manual"><span>1つずつ止まる</span></label>
+  </fieldset>
+  <div class="pe-audio-controls">
+    <label for="pe-volume">音量 <strong id="pe-volume-value">100%</strong></label>
+    <input id="pe-volume" type="range" min="0" max="100" step="5" value="100" aria-label="ビープ音量">
+    <span id="pe-audio-status" role="status">音は「スタート」または「音をためす」で有効になります</span>
+  </div>
+
+  <details class="pe-settings" id="pe-settings">
+    <summary>⚙ 活動名・秒数・順番・くり返し回数を設定する</summary>
+    <div class="pe-settings-content">
+      <div class="pe-round-setting"><label for="pe-rounds">くり返し回数</label><input id="pe-rounds" type="number" min="1" max="99" value="4"><span>周</span></div>
+      <div id="pe-step-list" class="pe-step-list"></div>
+      <div class="pe-settings-actions"><button type="button" id="pe-add">＋ 活動を追加</button><button type="button" id="pe-default">見本に戻す</button></div>
+      <p>活動の編集をするとタイマーは最初に戻ります。設定はブラウザに自動保存しません。</p>
+    </div>
+  </details>
+  <section class="pe-share" aria-labelledby="pe-share-heading">
+    <h2 id="pe-share-heading">🔗 作ったタイマーをリンクで共有する</h2>
+    <p>活動名・秒数・順番・色・周回数を設定したら、共有リンクをコピー。相手はそのリンクを開くだけで同じタイマーを使えます。</p>
+    <div class="pe-share-actions">
+      <button type="button" id="pe-export">🔗 共有リンクをコピー</button>
+      <a id="pe-open-share" class="pe-share-open" href="#" target="_blank" rel="noopener noreferrer" hidden>作ったタイマーを開いて確認 ↗</a>
+    </div>
+    <label for="pe-share-link">共有するリンク</label>
+    <input id="pe-share-link" type="text" readonly spellcheck="false" placeholder="「共有リンクをコピー」を押すと、ここに表示されます">
+    <div id="pe-share-status" role="status" aria-live="polite">このタイマーはブラウザに保存されません。残したい場合も共有リンクをコピーしておいてね。</div>
+    <p class="pe-share-note">※ リンク先は公開ページです。活動名に児童の氏名など個人情報は入力しないでください。</p>
+  </section>
+  <div class="pe-footnote">残り3・2・1秒で「ピ・ピ・ピ」、切り替えで「ビー！」。Chromebook本体の音量も上げてください。</div>
+</div>
+
+<style>
+  #pe-timer, #pe-timer * { box-sizing: border-box; }
+  #pe-timer {
+    --pe-bg:#eaf2ff; --pe-ink:#17253f; --pe-main:#ef475b;
+    width:100%; margin:0 auto; padding:14px; color:var(--pe-ink);
+    background:var(--pe-bg); border-radius:20px;
+    font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    font-size:16px; line-height:1.45; container-type:inline-size;
+  }
+  #pe-timer button,#pe-timer input,#pe-timer select {font:inherit;}
+  #pe-timer button {border:0; border-radius:14px; padding:12px 16px; font-weight:800; cursor:pointer; color:#193152; background:#fff; box-shadow:0 2px 9px #10233a20;}
+  #pe-timer button:focus-visible,#pe-timer input:focus-visible,#pe-timer select:focus-visible {outline:4px solid #ffbf36; outline-offset:2px;}
+  #pe-timer button:active {transform:translateY(1px);}
+  #pe-timer button:disabled {opacity:.35;cursor:not-allowed;}
+  #pe-timer .pe-stage {min-height:430px; padding:28px 26px 24px; display:flex; flex-direction:column; align-items:center; text-align:center; color:#fff;
+    background:linear-gradient(145deg,var(--pe-main),#172c50 95%); border-radius:24px; box-shadow:0 12px 28px #14233d30; transition:background .2s;}
+  #pe-timer .pe-stage-meta {width:100%;display:flex;justify-content:space-between;gap:12px;font-size:17px;font-weight:800;}
+  #pe-timer .pe-stage-meta span {background:#ffffff30;border:1px solid #ffffff60;padding:5px 12px;border-radius:999px;}
+  #pe-timer #pe-name {width:100%;margin:29px 0 0;font-weight:950;line-height:1.14;letter-spacing:.015em;
+    font-size:clamp(47px,10.8cqi,140px);overflow-wrap:anywhere;text-shadow:0 4px 12px #0002;}
+  #pe-timer .pe-clock {font-weight:950;letter-spacing:.015em;line-height:1.1; font-size:clamp(72px,15cqi,180px); font-variant-numeric:tabular-nums; margin:12px 0 15px;}
+  #pe-timer .pe-track {height:18px;width:min(100%,780px);border-radius:99px;background:#09182ce8;box-shadow:inset 0 2px 7px #0007;border:2px solid #00102870;overflow:hidden;margin:auto 0 18px;}
+  #pe-timer .pe-bar {height:100%;width:100%;border-radius:99px;background:#fff5ba;box-shadow:0 0 12px #fff9c0a8;transition:width .08s linear;}
+  #pe-timer .pe-next {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;font-size:clamp(13px,2cqi,19px);color:#ffffffd8;}
+  #pe-timer .pe-next strong {color:#fff;font-size:1.08em;}
+  #pe-timer .pe-stage.pe-urgent {outline:7px solid #ffdc5a;outline-offset:-7px;}
+  #pe-timer .pe-stage.pe-urgent .pe-clock {color:#ffed69;}
+  #pe-timer .pe-actions {display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:14px 0;}
+  #pe-timer .pe-actions button {flex:1 1 130px;min-height:57px;}
+  #pe-timer .pe-actions .pe-primary {background:#1249c4;color:white;font-size:20px;flex-grow:1.6;}
+  #pe-timer .pe-mode-select {display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;border:1px solid #d1def0;border-radius:14px;padding:10px 14px;margin:0 0 14px;background:white;}
+  #pe-timer .pe-mode-select legend {padding:0 6px;font-weight:850;font-size:14px;color:#345279;}
+  #pe-timer .pe-mode-select label {display:flex;align-items:center;gap:7px;font-weight:800;color:#284567;font-size:15px;cursor:pointer;}
+  #pe-timer .pe-mode-select input {width:18px;height:18px;accent-color:#1249c4;}
+  #pe-timer .pe-audio-controls {display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:4px 8px 14px;color:#355479;}
+  #pe-timer .pe-audio-controls label {font-weight:800;}
+  #pe-timer #pe-volume {width:145px;max-width:40%;accent-color:#155ad5;}
+  #pe-timer #pe-audio-status {font-size:13px;flex:1 1 280px;}
+  #pe-timer .pe-settings {background:#fff;border:1px solid #d7e0ee;border-radius:16px;overflow:hidden;}
+  #pe-timer .pe-settings summary {padding:16px;cursor:pointer;font-weight:850;font-size:17px;}
+  #pe-timer .pe-settings-content {padding:0 16px 18px;}
+  #pe-timer .pe-round-setting {display:flex;align-items:center;gap:9px;margin-bottom:16px;font-weight:800;}
+  #pe-timer #pe-rounds {width:80px;padding:7px;border:2px solid #d3dceb;border-radius:10px;}
+  #pe-timer .pe-step-list {display:grid;gap:9px;}
+  #pe-timer .pe-step {display:grid;grid-template-columns:minmax(120px,1fr) 86px 100px auto;gap:8px;align-items:center;background:#f0f5fb;border-radius:12px;padding:9px;}
+  #pe-timer .pe-step input,#pe-timer .pe-step select {width:100%;min-width:0;border:2px solid #d3dceb;border-radius:8px;padding:8px;background:white;color:#17253f;}
+  #pe-timer .pe-step .pe-small-actions {display:flex;gap:4px;flex-wrap:wrap;}
+  #pe-timer .pe-step .pe-small-actions button {padding:7px 10px;border-radius:9px;}
+  #pe-timer .pe-settings-actions {display:flex;flex-wrap:wrap;gap:9px;margin-top:13px;}
+  #pe-timer .pe-settings-content p,#pe-timer .pe-footnote {font-size:13px;color:#4b6686;}
+  #pe-timer .pe-share {margin-top:13px;padding:17px;background:#fff;border:1px solid #d7e0ee;border-radius:16px;}
+  #pe-timer .pe-share h2 {margin:0;font-size:20px;line-height:1.4;}
+  #pe-timer .pe-share p {margin:6px 0 14px;font-size:14px;color:#4b6686;}
+  #pe-timer .pe-share-actions {display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+  #pe-timer #pe-export {background:#1249c4;color:#fff;}
+  #pe-timer .pe-share-open {align-self:center;font-size:14px;font-weight:800;color:#1351b4;text-decoration:underline;}
+  #pe-timer .pe-share label {display:block;font-weight:750;font-size:14px;margin-bottom:5px;}
+  #pe-timer #pe-share-link {display:block;width:100%;min-height:43px;padding:10px;border:2px solid #d3dceb;border-radius:10px;background:#f8fbff;color:#17253f;font:13px/1.5 monospace;}
+  #pe-timer #pe-share-status {min-height:22px;margin-top:8px;color:#3b587b;font-size:13px;}
+  #pe-timer .pe-share .pe-share-note {margin:10px 0 0;font-size:12px;color:#6a7790;}
+  #pe-timer .pe-footnote {padding:12px 5px 3px;text-align:center;}
+  @container (max-width:780px) {
+    #pe-timer .pe-stage {min-height:350px;padding:20px 14px;}
+    #pe-timer .pe-stage-meta {font-size:13px;}
+    #pe-timer .pe-step {grid-template-columns:minmax(100px,1fr) 70px;}
+    #pe-timer .pe-step .pe-small-actions {grid-column:1/-1;justify-content:flex-start;}
+  }
+</style>
+
+<script>
+(() => {
+  'use strict';
+  const root = document.getElementById('pe-timer');
+  if (!root || root.dataset.initialized) return;
+  root.dataset.initialized = 'true';
+  const el = id => root.querySelector('#' + id);
+  const COLORS = { red:'#d74359', blue:'#2869d7', purple:'#8149b9', pink:'#d8589f', green:'#25866e', orange:'#dd7b25' };
+  const EXAMPLE = [
+    {name:'いちについて',seconds:10,color:'red'},
+    {name:'ゲームスタート',seconds:20,color:'blue'},
+    {name:'じゅんび',seconds:15,color:'purple'},
+    {name:'ゲームスタート',seconds:20,color:'pink'}
+  ];
+  const limit = (n,min,max) => Math.max(min,Math.min(max,n));
+  const clean = data => ({
+    rounds:limit(Math.round(Number(data?.rounds)||4),1,99),
+    volume:limit(Number(data?.volume ?? 100),0,100),
+    advanceMode:data?.advanceMode==='manual'?'manual':'auto',
+    steps:Array.isArray(data?.steps)&&data.steps.length ? data.steps.slice(0,40).map(s => ({
+      name:String(s?.name||'活動').slice(0,45), seconds:limit(Math.round(Number(s?.seconds)||10),1,35999),
+      color:Object.hasOwn(COLORS,s?.color)?s.color:'blue'
+    })) : EXAMPLE.map(s=>({...s}))
+  });
+  // The same page powers shared links and the Google Sites embed.
+  function decodeSharedConfig(encoded) {
+    try {
+      if(!encoded || encoded.length>20000)return null;
+      const bytes=Uint8Array.from(atob(encoded.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch {return null;}
+  }
+  function parseTimerTrain(params) {
+    try {
+      const raw=params.get('t');if(!raw)return null;
+      const steps=raw.split(',').map(item=>{
+        const first=item.indexOf('.'),second=item.indexOf('.',first+1);
+        if(first<0||second<0)return null;
+        let name=item.slice(second+1);
+        try{name=decodeURIComponent(name);}catch{}
+        return {color:item.slice(0,first),seconds:Number(item.slice(first+1,second)),name};
+      });
+      if(steps.some(s=>!s||!Number.isFinite(s.seconds)||s.seconds<=0))return null;
+      return {steps,rounds:Number(params.get('r'))||1};
+    }catch{return null;}
+  }
+  const params=new URLSearchParams(location.search);
+  const shared=params.has('s')?decodeSharedConfig(params.get('s')):null;
+  let config=clean(shared||parseTimerTrain(params));
+  let mode='idle', phase=0, round=0, remaining=0, endAt=0, timer=null, runSteps=[], runRounds=1, fired=new Set();
+  let ctx=null, output=null;
+
+  function audioUnlock() {
+    try {
+      if (!ctx) {
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) {el('pe-audio-status').textContent='このブラウザは音声再生に対応していません';return;}
+        ctx = new AudioCtor();
+        const limiter=ctx.createDynamicsCompressor();
+        limiter.threshold.value=-13; limiter.ratio.value=12;
+        output=ctx.createGain(); output.connect(limiter); limiter.connect(ctx.destination);
+      }
+      output.gain.value=config.volume/100;
+      if(ctx.state!=='running') ctx.resume().then(()=>{
+        el('pe-audio-status').textContent='🔊 音声オン';
+      }).catch(()=>{
+        el('pe-audio-status').textContent='音声がブロックされています。Chromeの音設定を確認してください';
+      });
+      else el('pe-audio-status').textContent='🔊 音声オン';
+    } catch {el('pe-audio-status').textContent='音声が有効にできませんでした';}
+  }
+  function beep(long=false,after=0) {
+    if(!ctx||!output||!config.volume) return;
+    const t=ctx.currentTime+after;
+    const duration=long?.82:.17;
+    for(const [freq,gain] of (long?[[920,.65],[1380,.3]]:[[850,.6],[1275,.28]])) {
+      const osc=ctx.createOscillator(), env=ctx.createGain();
+      osc.type='sine';osc.frequency.value=freq;
+      env.gain.setValueAtTime(.0001,t);
+      env.gain.exponentialRampToValueAtTime(gain,t+.012);
+      env.gain.setValueAtTime(gain,t+duration-.05);
+      env.gain.exponentialRampToValueAtTime(.0001,t+duration);
+      osc.connect(env);env.connect(output);osc.start(t);osc.stop(t+duration+.02);
+    }
+  }
+  const format = ms => {
+    const seconds=Math.ceil(Math.max(0,ms)/1000);
+    return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+  };
+  function draw() {
+    const steps=runSteps, current=steps[phase], isDone=mode==='done';
+    const secondsTotal=current.seconds*1000;
+    el('pe-stage').style.setProperty('--pe-main',COLORS[current.color]);
+    el('pe-name').textContent=isDone?'おしまい！':current.name;
+    el('pe-clock').textContent=isDone?'00:00':format(remaining);
+    el('pe-position').textContent=mode==='waiting'?`⏸ スタート待ち ${phase+1} / ${steps.length}`:`活動 ${phase+1} / ${steps.length}`;
+    el('pe-round').textContent=`${round+1} / ${runRounds} 周目`;
+    el('pe-bar').style.width=(isDone?0:limit(remaining/secondsTotal*100,0,100))+'%';
+    el('pe-stage').classList.toggle('pe-urgent',mode==='running'&&remaining>0&&remaining<=3000);
+    let next=phase+1<steps.length?steps[phase+1].name:round+1<runRounds?steps[0].name:'ゴール！';
+    el('pe-next-name').textContent=isDone?'終了':next;
+    el('pe-play').textContent=mode==='running'?'⏸ 一時停止':mode==='done'?'↻ もう一度':mode==='waiting'?'▶ つぎをスタート':'▶ スタート';
+    el('pe-skip').disabled=isDone;
+  }
+  function stopTick() { if(timer!==null)clearInterval(timer); timer=null; }
+  function reset() {
+    stopTick(); mode='idle';phase=0;round=0;fired=new Set();
+    runSteps=config.steps.map(s=>({...s}));runRounds=config.rounds;
+    remaining=runSteps[0].seconds*1000;endAt=0;draw();
+  }
+  function advance(playSound=true) {
+    if(phase<runSteps.length-1)phase++;
+    else if(round<runRounds-1){round++;phase=0;}
+    else {mode='done';remaining=0;stopTick();if(playSound)beep(true);draw();return;}
+    remaining=runSteps[phase].seconds*1000;
+    if(mode==='running'){
+      if(config.advanceMode==='manual') {mode='waiting';endAt=0;stopTick();}
+      else endAt+=remaining;
+    }
+    fired=new Set();if(playSound)beep(true);draw();
+  }
+  function tick() {
+    if(mode!=='running')return;
+    const now=performance.now();let count=0;
+    while(mode==='running'&&now>=endAt&&count++<250)advance(count===1&&now-endAt<450);
+    if(mode!=='running')return;
+    remaining=Math.max(0,endAt-now);
+    const sec=Math.ceil(remaining/1000);
+    if(sec<=3&&sec>=1&&!fired.has(sec)){
+      fired.add(sec);
+      if(document.visibilityState==='visible')beep();
+    }
+    draw();
+  }
+  function togglePlay() {
+    if(mode==='running'){remaining=Math.max(0,endAt-performance.now());mode='paused';stopTick();draw();return;}
+    if(mode==='done')reset();
+    audioUnlock();
+    // A short cue during the actual click unlocks audio reliably in Chrome.
+    beep(false);
+    mode='running';endAt=performance.now()+remaining;
+    stopTick();timer=setInterval(tick,50);tick();
+  }
+  function skip() {
+    if(mode==='done')return;
+    audioUnlock();
+    if(mode==='running')endAt=performance.now();
+    advance(true);
+    if(mode!=='running'&&mode!=='done'){mode=config.advanceMode==='manual'?'waiting':'paused';draw();}
+  }
+  function invalidateShareLink() {
+    el('pe-share-link').value='';
+    el('pe-open-share').hidden=true;
+    el('pe-share-status').textContent='設定を変更しました。新しい共有リンクをコピーしてください。';
+  }
+  function updateConfig() {reset();invalidateShareLink();}
+  function stepEditor() {
+    const list=el('pe-step-list');list.replaceChildren();
+    config.steps.forEach((step,i)=>{
+      const row=document.createElement('div');row.className='pe-step';row.dataset.index=i;
+      row.innerHTML='<input class="pe-step-name" aria-label="活動名" maxlength="45" placeholder="活動名"><input class="pe-step-seconds" aria-label="秒数" type="number" min="1" max="35999" step="1"><select class="pe-step-color" aria-label="背景色"><option value="red">赤</option><option value="blue">青</option><option value="purple">紫</option><option value="pink">ピンク</option><option value="green">緑</option><option value="orange">オレンジ</option></select><div class="pe-small-actions"><button type="button" data-action="up" aria-label="上へ">↑</button><button type="button" data-action="down" aria-label="下へ">↓</button><button type="button" data-action="duplicate" aria-label="この活動をコピー">⧉ コピー</button><button type="button" data-action="delete" aria-label="削除">×</button></div>';
+      row.querySelector('.pe-step-name').value=step.name;
+      row.querySelector('.pe-step-seconds').value=step.seconds;
+      row.querySelector('.pe-step-color').value=step.color;
+      row.querySelector('[data-action="up"]').disabled=i===0;
+      row.querySelector('[data-action="down"]').disabled=i===config.steps.length-1;
+      row.querySelector('[data-action="duplicate"]').disabled=config.steps.length>=40;
+      row.querySelector('[data-action="delete"]').disabled=config.steps.length===1;
+      list.append(row);
+    });
+    el('pe-rounds').value=config.rounds;
+    el('pe-volume').value=config.volume;
+    el('pe-volume-value').textContent=config.volume+'%';
+  }
+  el('pe-play').addEventListener('click',togglePlay);
+  el('pe-reset').addEventListener('click',reset);
+  el('pe-skip').addEventListener('click',skip);
+  el('pe-test').addEventListener('click',()=>{
+    audioUnlock();beep(false,.05);beep(false,1.05);beep(false,2.05);beep(true,3.05);
+  });
+  el('pe-volume').addEventListener('input',e=>{
+    config.volume=limit(Number(e.target.value),0,100);
+    el('pe-volume-value').textContent=config.volume+'%';
+    if(output)output.gain.value=config.volume/100;
+    invalidateShareLink();
+  });
+  root.querySelectorAll('input[name="pe-advance-mode"]').forEach(input=>{
+    input.addEventListener('change',e=>{
+      if(!e.target.checked)return;
+      config.advanceMode=e.target.value==='manual'?'manual':'auto';
+      invalidateShareLink();
+    });
+  });
+  el('pe-rounds').addEventListener('change',e=>{config.rounds=limit(Math.round(Number(e.target.value)||1),1,99);updateConfig();stepEditor();});
+  el('pe-step-list').addEventListener('change',e=>{
+    const row=e.target.closest('.pe-step');if(!row)return;
+    const step=config.steps[Number(row.dataset.index)];
+    if(e.target.classList.contains('pe-step-name'))step.name=e.target.value.trim().slice(0,45)||'活動';
+    if(e.target.classList.contains('pe-step-seconds'))step.seconds=limit(Math.round(Number(e.target.value)||1),1,35999);
+    if(e.target.classList.contains('pe-step-color'))step.color=e.target.value;
+    updateConfig();stepEditor();
+  });
+  el('pe-step-list').addEventListener('click',e=>{
+    const button=e.target.closest('button[data-action]');if(!button)return;
+    const i=Number(button.closest('.pe-step').dataset.index),action=button.dataset.action;
+    if(action==='up'&&i>0)[config.steps[i-1],config.steps[i]]=[config.steps[i],config.steps[i-1]];
+    if(action==='down'&&i<config.steps.length-1)[config.steps[i+1],config.steps[i]]=[config.steps[i],config.steps[i+1]];
+    if(action==='duplicate'&&config.steps.length<40)config.steps.splice(i+1,0,{...config.steps[i]});
+    if(action==='delete'&&config.steps.length>1)config.steps.splice(i,1);
+    updateConfig();stepEditor();
+  });
+  el('pe-add').addEventListener('click',()=>{
+    if(config.steps.length>=40)return;
+    config.steps.push({name:'新しい活動',seconds:20,color:'green'});
+    updateConfig();stepEditor();
+  });
+  el('pe-default').addEventListener('click',()=>{
+    config=clean(null);
+    root.querySelector('input[name="pe-advance-mode"][value="auto"]').checked=true;
+    updateConfig();stepEditor();
+  });
+  const encodeShare = data => {
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    let binary='';for(const b of bytes)binary+=String.fromCharCode(b);
+    return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  };
+  // Keep shared links on the same GitHub Pages website instead of ChatGPT Sites.
+  const SHARE_BASE=new URL(window.location.pathname,window.location.origin).href;
+  el('pe-export').addEventListener('click',async()=>{
+    const url=new URL(SHARE_BASE);
+    url.searchParams.set('s',encodeShare(config));
+    const link=url.toString(),area=el('pe-share-link');
+    area.value=link;area.focus();area.select();
+    el('pe-open-share').href=link;
+    el('pe-open-share').hidden=false;
+    let copied=false;
+    // Google Sitesの埋め込み枠でClipboard APIが制限されてもコピーを試みる。
+    try {copied=document.execCommand('copy');} catch {}
+    try {
+      if(!copied&&navigator.clipboard?.writeText){await navigator.clipboard.writeText(link);copied=true;}
+    } catch {}
+    el('pe-share-status').textContent=copied
+      ? '✅ リンクをコピーしました！ メールやチャットで送ってね。'
+      : 'リンクを表示しました。選択された文字を Ctrl + C でコピーして送ってね。';
+  });
+  root.querySelector('input[name="pe-advance-mode"][value="'+config.advanceMode+'"]').checked=true;
+  stepEditor();reset();
+})();
+</script>
+</body>
+</html>
